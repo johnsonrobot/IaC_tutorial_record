@@ -1,0 +1,197 @@
+Parameters:
+  subnetName:
+    Description: Select a subnet to host an instance
+    Type: AWS::EC2::Subnet::Id
+
+  VPCName:
+    Description: Select a VPC
+    Type: AWS::EC2::VPC::Id
+  
+  RegionAZ:
+    Description: Select one AZ
+    Type: AWS::EC2::AvailabilityZone::Name
+
+  EC2Type:
+    Description: Choose your EC2 type
+    Type: String
+    Default: t3.micro
+    AllowedValues:
+      - t3.micro
+      - t3.small
+      - t3.medium
+
+  EC2Tag:
+    Description: Tag your instance
+    Type: String
+    Default: Name
+
+  EC2Value:
+    Description: Input your instance name
+    Type: String
+
+  EbsType:
+    Description: Choose your volume type
+    Default: gp3
+    Type: String
+    AllowedValues:
+      - gp2
+      - gp3
+      - io1
+      - io2
+
+  SGName:
+    Description: Input a security group name
+    Type: String
+
+  SSHKey:
+    Description: Choose your key to SSH EC2
+    Type: AWS::EC2::KeyPair::KeyName
+
+  repoDescirbe:
+    Description: describe your repo
+    Type: String
+
+  repoName:
+    Description: Input your repo name 
+    Type: String
+
+  appName:
+    Description: Input your name in CodeDeploy
+    Type: String
+
+  platform:
+    Description: Choose your platform in CodeDeploy
+    Type: String
+    AllowedValues:
+      - ECS
+      - Lambda
+      - Server
+  
+  deploycfg:
+    Description: Choose your deployment way
+    Type: String
+    Default: CodeDeployDefault.AllAtOnce
+    AllowedValues:
+      - CodeDeployDefault.OneAtATime
+      - CodeDeployDefault.HalfAtATime
+      - CodeDeployDefault.AllAtOnce
+
+  deploygrp:
+    Description: Input your group Name in CodeDeployGroup
+    Type: String
+  
+  cdtype:
+    Type: String
+    AllowedValues:
+      - BLUE_GREEN
+      - IN_PLACE
+
+Resources:
+  iamRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: J-deploy-admin-role
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Role to provide access to CodeDeploy
+      ManagedPolicyArns:
+        - !Sub arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole
+      # Policies:
+      #   - 
+      #    PolicyName: "codeDeployAdmin"
+      #    PolicyDocument:
+      #      Version: "2012-10-17"
+      #      Statement:
+      #         - 
+      #           Effect: "Allow"
+      #           Action: "*"
+      #           Resource: "*"
+
+  myEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      KeyName: !Ref SSHKey
+      ImageId: ami-0fb653ca2d3203ac1 #ubuntu 20.04
+      AvailabilityZone: !Ref RegionAZ
+      NetworkInterfaces:
+        - DeviceIndex: "0"
+          AssociatePublicIpAddress: true
+          DeleteOnTermination: true
+          SubnetId: !Ref subnetName
+          GroupSet:
+            - !Ref secGroupName
+      # SubnetId: !Ref subnetName
+      InstanceType: !Ref EC2Type
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs: 
+            VolumeType: !Ref EbsType
+            VolumeSize: 20
+      Tags:
+        - Key: !Ref EC2Tag
+          Value: !Ref EC2Value
+
+  secGroupName:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Input your name
+      VpcId: !Ref VPCName
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Ref SGName
+
+  codeCommitRepository:
+    Type: AWS::CodeCommit::Repository
+    Properties:
+      RepositoryDescription: !Ref repoDescirbe
+      RepositoryName: !Ref repoName
+
+  codeDeployApp:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Ref appName
+      ComputePlatform: !Ref platform
+
+  codeDeployGrp:
+    Type: AWS::CodeDeploy::DeploymentGroup 
+    Properties:
+      ServiceRoleArn: !GetAtt iamRole.Arn
+      ApplicationName: !Ref codeDeployApp
+      # AutoScalingGroups:
+      #   - ""
+      # BlueGreenDeploymentConfiguration:
+      DeploymentConfigName: !Ref deploycfg
+      DeploymentGroupName: !Ref deploygrp
+      DeploymentStyle:
+        DeploymentType: !Ref cdtype
+  
+Outputs:
+  EC2PublicDNS:
+    Description: Public Domain Name in EC2
+    Value: !GetAtt myEC2Instance.PublicDnsName
+  
+  EC2PublicIp:
+    Description: Public Ip in EC2
+    Value: !GetAtt myEC2Instance.PublicIp
+
+

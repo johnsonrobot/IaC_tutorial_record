@@ -1,0 +1,95 @@
+Resources:
+  myVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: itdemo-vpc-cf
+          Value: v1
+  subnetName:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: us-east-2a
+      VpcId: !Ref myVPC
+      CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: itdemo-subnet-cf
+          Value: v1
+  igwName:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: itdemo-igw-cf
+          Value: v1
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref myVPC 
+      InternetGatewayId: !Ref igwName
+  routeTableName:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref myVPC
+      Tags:
+        - Key: itdemo-rt-cf
+          Value: v1
+  routeName:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref routeTableName
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref igwName
+  routeTableAssocName:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref subnetName
+      RouteTableId: !Ref routeTableName
+  secGroupName:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: itdemo-sg
+      GroupDescription: it 30 days demo
+      VpcId: !Ref myVPC 
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: itdemo-sg-cf
+          Value: v1
+  myEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: "/dev/xvda"
+          Ebs:
+            VolumeSize: 10
+            VolumeType: gp3
+      KeyName: "itdemo"
+      SubnetId: !Ref subnetName
+      DisableApiTermination: false
+      ImageId: ami-0443305dabd4be2bc
+      InstanceType: "t3.micro"
+      SecurityGroupIds:
+        - !Ref secGroupName
+      UserData: !Base64 |
+        #!/bin/bash -ex
+        yum -y update
+        yum -y install httpd php mysql php-mysql
+        chkconfig httpd on
+        service httpd start
+        cd /var/www/html
+        wget https://s3-us-west-2.amazonaws.com/us-west-2-aws-training/awsu-spl/spl-13/scripts/app.tgz
+        tar xvfz app.tgz
+        chown apache:root /var/www/html/rds.conf.php
+      Tags:
+        - Key: itdemo-ec2-cf
+          Value: v1
