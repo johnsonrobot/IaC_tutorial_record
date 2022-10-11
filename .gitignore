@@ -2,4 +2,4 @@
 test-project/
 ecs/
 .gitignore
-*.pem
+it-demo/itdemo.pem
